@@ -1,0 +1,145 @@
+// Center on Kasese District.
+Map.setCenter(30.05, 0.16, 9); 
+
+//Daily Rainfall
+var rain_daily = rain_d.select("precipitation").filterDate("2020-04-01","2020-05-11").filterBounds(Kasese);
+print(rain_daily);
+Map.addLayer( rain_daily, {palette: ["green", "yellow", "red"], min:0, max: 100}, 'Daily rainfall');
+
+//Chart  
+var trend = ui.Chart.image.series(rain_daily, Kasese, ee.Reducer.mean(), 1000, "system:time_start").setOptions({
+           title: 'Rainfall variance in Kasese District',
+    vAxis: {title: 'mm/day'},
+    lineWidth: 1,
+    pointSize: 4 
+            });
+print(trend);
+
+//Pentad Rainfall
+var rain_Pentad = rain_p.select("precipitation").filterDate("2020-03-01","2020-05-11").filterBounds(Kasese);
+print(rain_Pentad);
+Map.addLayer(rain_Pentad , {palette: ["green", "yellow", "red"], min:0, max: 100}, '5-Day rainfall');
+
+
+//Temperature
+var l8 = ee.ImageCollection("LANDSAT/LC08/C01/T1_32DAY_TOA");
+var temp = l8.select('B11').filterBounds(Kasese).filterDate('2019-01-01','2020-05-28');
+print(temp, 'temperature');
+
+var temp_trend = ui.Chart.image.seriesByRegion(temp, Kasese, ee.Reducer.mean(), 'B11', 200)
+                 .setChartType('ScatterChart')
+                 .setOptions({
+                   title: 'Temperature Variance of Kasese',
+                   vAxis: {title: 'Kelvin'},
+                   pointSize: 4,
+                   lineWidth: 1
+                 });
+                 
+print(temp_trend, 'Temperature variance');
+
+//Soil Moisture
+//Soil Surface Moisture 
+var SSM = SM.select("ssm").filterDate("2020-03-01","2020-05-11").filterBounds(Kasese);
+//print(SSM);
+Map.addLayer( SSM, {palette: ["green", "yellow", "red"], min:0, max: 100}, 'Surface Soil Moisture');
+
+//Chart  
+var trend = ui.Chart.image.series(SSM, Kasese, ee.Reducer.mean(), 1000, "system:time_start").setOptions({
+           title: 'Soil Surface Moisture',
+    vAxis: {title: 'mm'},
+    lineWidth: 1,
+    pointSize: 4 
+            });
+print(trend);
+
+//Soil Sub-surface Moisture 
+var SUSM = SM.select("susm").filterDate("2020-03-01","2020-05-11").filterBounds(Kasese);
+//print(SUSM);
+Map.addLayer( SUSM, {palette: ["green", "yellow", "red"], min:0, max: 100}, 'Sub-Surface Soil Moisture');
+
+//Chart  
+var trend = ui.Chart.image.series(SUSM, Kasese, ee.Reducer.mean(), 1000, "system:time_start").setOptions({
+           title: 'Sub-Surface Soil Moisture',
+    vAxis: {title: 'mm'},
+    lineWidth: 1,
+    pointSize: 4 
+            });
+print(trend);
+
+//NDVI
+var l8 = ee.ImageCollection("LANDSAT/LC08/C01/T1_TOA").filterDate('2020-01-01', '2020-05-28');
+// Get the least cloudy image in 2020.
+var image = ee.Image(
+  l8.filterBounds(Kasese)
+    .filterDate('2020-01-01', '2020-05-28')
+    .sort('CLOUD_COVER')
+    .first()
+);
+
+// Compute the Normalized Difference Vegetation Index (NDVI).
+var nir = image.select('B5');
+var red = image.select('B4');
+ndvi = nir.subtract(red).divide(nir.add(red)).rename('NDVI');
+
+// Display the result.
+Map.centerObject(image, 9);
+var ndviParams = {min: -1, max: 1, palette: ['blue', 'white', 'green']};
+Map.addLayer(ndvi, ndviParams, 'NDVI image');
+print(ndvi);
+
+var addNDVI = function(image) {
+  var ndvi = image.normalizedDifference(['B5', 'B4']).rename('NDVI');
+  return image.addBands(ndvi);
+};
+
+// Test the addNDVI function on a single image.
+var ndvi = addNDVI(image).select('NDVI');
+var withNDVI = l8.map(addNDVI);
+
+// Make a "greenest" pixel composite.
+var greenest = withNDVI.qualityMosaic('NDVI');
+
+// Display the result.
+var visParams = {bands: ['B4', 'B3', 'B2'], max: 0.3};
+Map.addLayer(greenest, visParams, 'Greenest pixel composite');
+
+// Create a chart.
+var chart = ui.Chart.image.series({
+  imageCollection: withNDVI.select('NDVI'),
+  region: Kasese,
+  reducer: ee.Reducer.first(),
+  scale: 30
+}).setOptions({title: 'NDVI over time'});
+
+// Display the chart in the console.
+print(chart);
+var cloudlessNDVI = l8.map(function(image) {
+  // Get a cloud score in [0, 100].
+  var cloud = ee.Algorithms.Landsat.simpleCloudScore(image).select('cloud');
+
+  // Create a mask of cloudy pixels from an arbitrary threshold.
+  var mask = cloud.lte(60);
+
+  // Compute NDVI.
+  var ndvi = image.normalizedDifference(['B5', 'B4']).rename('NDVI');
+
+  // Return the masked image with an NDVI band.
+  return image.addBands(ndvi).updateMask(mask);
+});
+
+
+
+print(ui.Chart.image.series({
+  imageCollection: cloudlessNDVI.select('NDVI'),
+  region: Kasese,
+  reducer: ee.Reducer.first(),
+  scale: 30
+}).setOptions({title: 'Cloud-masked NDVI over time'}));
+
+var greenest = cloudlessNDVI.qualityMosaic('NDVI');
+// Create a 3-band, 8-bit, color-IR composite to export.
+var visualization = greenest.visualize({
+  bands: ['B5', 'B4', 'B3'],
+  max: 0.4
+});
+
