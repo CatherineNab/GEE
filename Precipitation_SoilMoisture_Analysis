@@ -1,3 +1,7 @@
+// "rain_p" is the imaage collection for precipitation data CHIRPS Pentad
+// "Kasese" is the study area
+// "rain_d" is the imaage collection for precipitation data CHIRPS Daily
+// "SM" is the soil moisture data from NASA-USDA Global Soil Moisture Data
 // Center on Kasese District.
 Map.setCenter(30.05, 0.16, 9); 
 
